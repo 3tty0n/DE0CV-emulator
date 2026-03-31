@@ -39,10 +39,15 @@ jobs:
       - name: Build
         run: cargo build --release --target ${{ matrix.target }}
 
+      - name: Remove quarantine attribute (macOS)
+        if: runner.os == 'macOS'
+        run: xattr -cr target/${{ matrix.target }}/release/de0cv_emulator
+
       - name: Package (Unix)
         if: runner.os != 'Windows'
         run: |
           cd target/${{ matrix.target }}/release
+          chmod +x de0cv_emulator
           tar czf ../../../${{ matrix.name }}.tar.gz de0cv_emulator
           cd ../../..
 
