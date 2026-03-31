@@ -22,6 +22,8 @@
 | Linux | `de0cv_emulator-linux-x86_64.tar.gz` |
 | Windows | `de0cv_emulator-windows-x86_64.zip` |
 
+Apple Silicon を使用した macOS ラップトップを使用している場合:
+
 ダウンロード後、展開して実行します。
 
 ```sh

@@ -22,6 +22,8 @@ Download the latest release for your platform from the [Releases page](https://g
 | Linux (x86_64) | `de0cv_emulator-linux-x86_64.tar.gz` |
 | Windows (x86_64) | `de0cv_emulator-windows-x86_64.zip` |
 
+Example: when you use macOS with Apple Silicon:
+
 ```sh
 tar xzf de0cv_emulator-macos-aarch64.tar.gz
 ./de0cv_emulator assignment/day1/seg7dec.v
