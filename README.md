@@ -31,25 +31,25 @@ Pass one or more `.v` files. The first module found becomes the top module (over
 
 ```sh
 # 7-segment decoder: toggle SW[0]-SW[3] with F1-F4
-cargo run --release -- src_ans/day1/seg7dec.v
+cargo run --release -- assignment/day1/seg7dec.v
 
 # 1-second counter (0-9)
-cargo run --release -- src_ans/day1/sec10.v
+cargo run --release -- assignment/day1/sec10.v
 
 # 60-second counter (requires seg7dec_u dependency)
-cargo run --release -- src_ans/day3/sec60_for_ModelSim.v src_ans/day3/seg7dec_u.v
+cargo run --release -- assignment/day3/sec60_for_ModelSim.v assignment/day3/seg7dec_u.v
 
 # Dice counter
-cargo run --release -- src_ans/day2/Dice_Counter.v
+cargo run --release -- assignment/day2/Dice_Counter.v
 
 # Rock-Paper-Scissors / Dice trial
-cargo run --release -- src_ans/day3/RPS.v
+cargo run --release -- assignment/day3/RPS.v
 
 # Shift register
-cargo run --release -- src_ans/day1/SR2.v
+cargo run --release -- assignment/day1/SR2.v
 
 # Gate-level dice counter
-cargo run --release -- src_ans/day2/Dice_Trial_Gate.v
+cargo run --release -- assignment/day2/Dice_Trial_Gate.v
 ```
 
 ## Controls
