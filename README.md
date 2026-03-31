@@ -1,66 +1,45 @@
 # DE0-CV FPGA Emulator
 
-[DE0-CV](https://www.terasic.com.tw/cgi-bin/page/archive.pl?No=921) FPGAボードのターミナルエミュレータです。
-自分で書いた Verilog HDL ファイルを読み込み、LED や 7セグメントディスプレイの動作をターミナル上で確認できます。
+A terminal-based emulator for the [DE0-CV](https://www.terasic.com.tw/cgi-bin/page/archive.pl?No=921) FPGA development board.
+It parses and simulates Verilog HDL files, rendering LEDs and 7-segment displays in a TUI.
 
-実機がなくても、手元のPC（macOS / Linux / Windows）で動作確認ができます。
+Works on macOS, Linux, and Windows — no FPGA hardware required.
+
+> **[日本語版はこちら / Japanese version](./README.ja.md)**
 
 ---
 
-## インストール方法
+## Installation
 
-### 方法1: ビルド済みバイナリをダウンロード（おすすめ）
+### Option 1: Download pre-built binary (recommended)
 
-[Releases ページ](https://github.com/3tty0n/DE0CV-simulator/releases) から、自分の OS に合ったファイルをダウンロードしてください。
+Download the latest release for your platform from the [Releases page](https://github.com/3tty0n/DE0CV-simulator/releases).
 
-| OS | ファイル |
-|----|---------|
+| Platform | File |
+|----------|------|
 | macOS (Apple Silicon) | `de0cv_emulator-macos-aarch64.tar.gz` |
 | macOS (Intel) | `de0cv_emulator-macos-x86_64.tar.gz` |
-| Linux | `de0cv_emulator-linux-x86_64.tar.gz` |
-| Windows | `de0cv_emulator-windows-x86_64.zip` |
-
-ダウンロード後、展開して実行します。
+| Linux (x86_64) | `de0cv_emulator-linux-x86_64.tar.gz` |
+| Windows (x86_64) | `de0cv_emulator-windows-x86_64.zip` |
 
 ```sh
 tar xzf de0cv_emulator-macos-aarch64.tar.gz
 ./de0cv_emulator assignment/day1/seg7dec.v
 ```
 
-#### macOS で「開発元を検証できません」と表示される場合
+#### macOS: "Apple could not verify" warning
 
-macOS では、署名のないバイナリがブロックされることがあります。
-以下のいずれかの方法で解除してください。
-
-**方法A: ターミナルで実行（簡単）**
+macOS blocks unsigned binaries by default. To fix this, run:
 
 ```sh
 xattr -d com.apple.quarantine ./de0cv_emulator
 ```
 
-**方法B: システム設定から許可**
+Or: **System Settings > Privacy & Security > scroll down > "Allow Anyway"**.
 
-1. エミュレータを一度実行する（エラーが出る）
-2. **「システム設定」>「プライバシーとセキュリティ」** を開く
-3. 下にスクロールして **「このまま許可」** をクリック
+### Option 2: Build from source
 
----
-
-### 方法2: ソースからビルド
-
-#### Rust のインストール
-
-まだ Rust をインストールしていない場合は、以下のコマンドを実行してください。
-
-```sh
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-```
-
-インストール後、ターミナルを再起動してください。
-
-### ビルド
-
-このリポジトリをクローンして、ビルドします。
+Requires [Rust](https://rustup.rs/) 1.85+.
 
 ```sh
 git clone git@github.com:3tty0n/DE0CV-simulator.git
@@ -70,151 +49,148 @@ cargo build --release
 
 ---
 
-## 使い方
+## Usage
 
 ```sh
-cargo run --release -- <ファイル.v> [ファイル.v ...] [オプション]
+cargo run --release -- <file.v> [file.v ...] [options]
 ```
 
-引数に `.v` ファイルを渡すと、最初に見つかったモジュールがトップモジュールになります。
-依存モジュール（例: `SEG7DEC_U`）は同じディレクトリから自動的に検索されるので、多くの場合1ファイルだけで動きます。
+Pass one or more `.v` files. The first module found becomes the top module.
+Dependencies (e.g., `SEG7DEC_U`) are auto-discovered from the same and sibling directories.
 
-### オプション
+### Options
 
-| オプション | 説明 |
-|-----------|------|
-| `--top <モジュール名>` | トップモジュールを明示的に指定する |
-| `--speed <N>` | 1フレームあたりのクロックサイクル数（デフォルト: 1000） |
+| Option | Description |
+|--------|-------------|
+| `--top <name>` | Specify the top-level module name |
+| `--speed <N>` | Clock cycles per frame (default: 1000) |
 
----
-
-## 実行例
-
-### Day1
+### Examples
 
 ```sh
-# 7セグメントデコーダ（SW[3:0] で 0〜F を表示）
+# 7-segment decoder: toggle SW[0]-SW[3] with F1-F4
 cargo run --release -- assignment/day1/seg7dec.v
 
-# 1秒カウンタ（0〜9 を繰り返す）
+# 1-second counter (0-9)
 cargo run --release -- assignment/day1/sec10.v
 
-# シフトレジスタ
+# 60-second counter (auto-discovers seg7dec_u.v)
+cargo run --release -- assignment/day3/sec60_for_ModelSim.v
+
+# Dice counter
+cargo run --release -- assignment/day2/Dice_Counter.v
+
+# Rock-Paper-Scissors / Dice trial
+cargo run --release -- assignment/day3/RPS.v
+
+# Shift register
 cargo run --release -- assignment/day1/SR2.v
 
-# サイコロカウンタ（0〜5 を繰り返す）
-cargo run --release -- assignment/day1/Dice_Counter.v
-```
-
-### Day2
-
-```sh
-# サイコロカウンタ（7セグ表示つき）
-cargo run --release -- assignment/day2/Dice_Trial_s7d.v
-
-# ゲートレベルのサイコロカウンタ
+# Gate-level dice counter
 cargo run --release -- assignment/day2/Dice_Trial_Gate.v
 ```
 
-### Day3
+---
 
-```sh
-# じゃんけん / サイコロ（1〜6 を高速で回転、KEY[0] で停止）
-cargo run --release -- assignment/day3/RPS.v
+## Controls
 
-# 60秒カウンタ（HEX1:HEX0 に 00〜59 を表示）
-cargo run --release -- assignment/day3/sec60_for_ModelSim.v
-```
+| Key | Action |
+|-----|--------|
+| `1` `2` `3` `4` | Press KEY[0]--KEY[3] (push buttons) |
+| `F1`--`F10` | Toggle SW[0]--SW[9] (DIP switches) |
+| `r` | Reset (pulse RST for one frame) |
+| `F10` | Toggle SW9 / RST (same as real DE0-CV) |
+| `Space` | Pause / resume simulation |
+| `q` / `Esc` | Quit |
 
 ---
 
-## キー操作
+## Emulated Hardware
 
-エミュレータ起動後、以下のキーで操作できます。
-
-| キー | 操作 |
-|------|------|
-| `1` `2` `3` `4` | KEY[0]〜KEY[3] を押す（プッシュボタン） |
-| `F1`〜`F10` | SW[0]〜SW[9] を切り替える（DIPスイッチ） |
-| `r` | リセット（RST を1フレーム送信） |
-| `F10` | SW9 / RST のトグル（実機と同じ配置） |
-| `Space` | シミュレーションの一時停止 / 再開 |
-| `q` / `Esc` | 終了 |
-
-### 操作のポイント
-
-- **seg7dec**: `F1`〜`F4`（SW[0]〜SW[3]）を切り替えると、HEX0 の表示が変わります
-- **Dice_Counter**: 高速でカウントしているので、`F10`（RST/SW9）で停止・再開します
-- **SR2**: `F1`（SW[0]）でデータ入力、`1`（KEY[0]）でクロックを送ります
-- **sec10 / sec60**: 自動でカウントアップします。`--speed` を大きくすると速くなります
+| Component | Description |
+|-----------|-------------|
+| **LEDR[9:0]** | 10 red LEDs |
+| **HEX0--HEX5** | 6 seven-segment displays (active-low, red) |
+| **KEY[3:0]** | 4 push buttons (keys `1`--`4`) |
+| **SW[9:0]** | 10 DIP switches (`F1`--`F10`) |
+| **CLK** | 50 MHz clock (speed adjustable with `--speed`) |
+| **RST** | Reset signal (`r` key or `F10` / SW9) |
 
 ---
 
-## エミュレートされるハードウェア
+## Supported Verilog Subset
 
-ターミナル上に以下の DE0-CV ボードの部品が表示されます。
+The emulator supports the Verilog constructs commonly used in introductory FPGA labs.
 
-| 部品 | 説明 |
-|------|------|
-| **LEDR[9:0]** | 10個の赤色LED |
-| **HEX0〜HEX5** | 6個の7セグメントディスプレイ（赤色表示） |
-| **KEY[3:0]** | 4個のプッシュボタン（キー `1`〜`4` で操作） |
-| **SW[9:0]** | 10個のDIPスイッチ（`F1`〜`F10` で切り替え） |
-| **CLK** | 50MHz クロック（シミュレーション速度は `--speed` で調整） |
-| **RST** | リセット信号（`r` キーまたは `F10` / SW9） |
-
----
-
-## 対応している Verilog の書き方
-
-このエミュレータは、実験で使う基本的な Verilog 構文に対応しています。
-
-### モジュール
+### Modules
 
 ```verilog
-module モジュール名(ポート一覧);
-  // ANSI スタイル・非ANSIスタイルの両方に対応
+module name(port_list);   // ANSI and non-ANSI port styles
 endmodule
 ```
 
-### 宣言
+### Declarations
 
-- `input` / `output` / `reg` / `wire`（ビット幅指定可）
-- `reg [3:0] cnt = 0;`（初期値つき）
+- `input` / `output` / `reg` / `wire` with bit ranges
+- Initial values: `reg [3:0] cnt = 0;`
 
-### always ブロック
+### Always blocks
 
-- `always @(posedge CLK)` — クロック立ち上がりで動作
-- `always @(posedge RST or posedge CLK)` — 複数エッジ
-- `always @*` — 組み合わせ回路
+- `always @(posedge CLK)` -- sequential logic
+- `always @(posedge RST or posedge CLK)` -- multiple edges
+- `always @*` -- combinational logic
 
-### 代入
+### Assignments
 
-- ブロッキング代入: `cnt = cnt + 1;`
-- ノンブロッキング代入: `cnt <= cnt + 1;`
-- 連続代入: `assign wire名 = 式;`
+- Blocking: `cnt = cnt + 1;`
+- Non-blocking: `cnt <= cnt + 1;`
+- Continuous: `assign wire_name = expr;`
 
-### 制御構文
+### Control flow
 
 - `if` / `else if` / `else`
 - `case` / `endcase` / `default`
 
-### 演算子
+### Operators
 
 `+` `-` `==` `!=` `<` `>` `<=` `>=` `&` `|` `^` `~` `!` `&&` `||` `? :`
 
-### 数値リテラル
+### Number literals
 
 ```verilog
-0           // 10進
-3'd5        // 3ビット幅の10進数 5
-4'hF        // 4ビット幅の16進数 F
-7'b1000000  // 7ビット幅の2進数
-26'd49_999_999  // アンダースコア区切り可
+0                // decimal
+3'd5             // 3-bit decimal
+4'hF             // 4-bit hex
+7'b1000000       // 7-bit binary
+26'd49_999_999   // underscores allowed
 ```
 
-### その他
+### Other
 
-- ビット選択: `signal[n]`
-- モジュールインスタンス化（位置指定）: `SEG7DEC_U seg7du(sec, HEX0);`
-- テストベンチ（`initial` / `always #delay`）は自動でスキップされます
+- Bit select: `signal[n]`
+- Module instantiation (positional): `SEG7DEC_U seg7du(sec, HEX0);`
+- Testbench constructs (`initial`, `always #delay`) are automatically skipped
+
+---
+
+## Architecture
+
+```
+src/
+├── main.rs              # TUI app, event loop, CLI
+├── board.rs             # DE0-CV board state (LEDs, 7-seg, switches)
+├── display.rs           # Ratatui widgets for 7-segment and LED rendering
+└── verilog/
+    ├── lexer.rs         # Tokenizer
+    ├── parser.rs        # Recursive descent parser -> AST
+    ├── ast.rs           # AST type definitions
+    └── simulator.rs     # Compiles AST to indexed IR, evaluates clock cycles
+```
+
+The simulator compiles Verilog modules into an indexed intermediate representation where all signal names are resolved to array indices at setup time. This avoids HashMap lookups during simulation, achieving ~30M clock cycles/sec in release mode.
+
+---
+
+## License
+
+MIT
