@@ -94,6 +94,8 @@ cargo run --release -- <ファイル.v> [ファイル.v ...] [オプション]
 
 ## 実行例
 
+ダウンロードしたバイナリを使用する場合は `cargo run --release --` を `./de0cv_emulator` に置き換えて下さい。
+
 ### Day1
 
 ```sh
