@@ -23,7 +23,7 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 
 const TICK_RATE_MS: u64 = 16; // ~60fps
-const DEFAULT_CYCLES_PER_FRAME: u64 = 1_000; //  833_333; // 50MHz
+const DEFAULT_CYCLES_PER_FRAME: u64 = 833_333; // ~50MHz real-time
 
 fn main() -> io::Result<()> {
     let args: Vec<String> = std::env::args().collect();

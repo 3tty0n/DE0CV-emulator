@@ -317,6 +317,20 @@ impl Simulator {
             }
             led_bit += *width as usize;
         }
+        // Auto-display output_leds on 7-seg when no standard HEX ports are mapped
+        // (e.g. DiceCounter outputs dice[2:0] with no HEX port)
+        if self.ports.hex.iter().all(|h| h.is_none()) && !self.ports.output_leds.is_empty() {
+            let mut total_val = 0u64;
+            let mut bit_offset = 0u32;
+            for (_, id, width) in &self.ports.output_leds {
+                total_val |= self.values[*id] << bit_offset;
+                bit_offset += *width;
+            }
+            for i in 0..6usize {
+                let nibble = ((total_val >> (i * 4)) & 0xF) as u8;
+                board.set_hex(i, nibble_to_seg7(nibble));
+            }
+        }
     }
 
 }
@@ -792,5 +806,28 @@ fn range_to_width(range: Option<(i32, i32)>) -> u32 {
     match range {
         Some((high, low)) => (high - low + 1).max(1) as u32,
         None => 1,
+    }
+}
+
+/// Map a 4-bit nibble to active-low 7-segment encoding (gfedcba)
+/// Matches the DE0-CV standard seg7dec encoding used in the assignments
+fn nibble_to_seg7(n: u8) -> u8 {
+    match n & 0xF {
+        0x0 => 0b1000000,
+        0x1 => 0b1111001,
+        0x2 => 0b0100100,
+        0x3 => 0b0110000,
+        0x4 => 0b0011001,
+        0x5 => 0b0010010,
+        0x6 => 0b0000010,
+        0x7 => 0b1011000,
+        0x8 => 0b0000000,
+        0x9 => 0b0010000,
+        0xA => 0b0001000,
+        0xB => 0b0000011,
+        0xC => 0b1000110,
+        0xD => 0b0100001,
+        0xE => 0b0000110,
+        _   => 0b0001110, // 0xF
     }
 }
