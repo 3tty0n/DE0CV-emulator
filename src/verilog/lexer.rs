@@ -1,3 +1,5 @@
+use std::fmt;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     // Keywords
@@ -62,10 +64,70 @@ pub enum Token {
     Eof,
 }
 
+impl fmt::Display for Token {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Token::Semi       => write!(f, "`;`"),
+            Token::Comma      => write!(f, "`,`"),
+            Token::LParen     => write!(f, "`(`"),
+            Token::RParen     => write!(f, "`)`"),
+            Token::LBrack     => write!(f, "`[`"),
+            Token::RBrack     => write!(f, "`]`"),
+            Token::LBrace     => write!(f, "`{{`"),
+            Token::RBrace     => write!(f, "`}}`"),
+            Token::Eq         => write!(f, "`=`"),
+            Token::EqEq       => write!(f, "`==`"),
+            Token::Neq        => write!(f, "`!=`"),
+            Token::Lte        => write!(f, "`<=`"),
+            Token::Gte        => write!(f, "`>=`"),
+            Token::Lt         => write!(f, "`<`"),
+            Token::Gt         => write!(f, "`>`"),
+            Token::Plus       => write!(f, "`+`"),
+            Token::Minus      => write!(f, "`-`"),
+            Token::Star       => write!(f, "`*`"),
+            Token::Amp        => write!(f, "`&`"),
+            Token::Pipe       => write!(f, "`|`"),
+            Token::Caret      => write!(f, "`^`"),
+            Token::Tilde      => write!(f, "`~`"),
+            Token::Bang       => write!(f, "`!`"),
+            Token::AmpAmp     => write!(f, "`&&`"),
+            Token::PipePipe   => write!(f, "`||`"),
+            Token::Question   => write!(f, "`?`"),
+            Token::Colon      => write!(f, "`:`"),
+            Token::Dot        => write!(f, "`.`"),
+            Token::At         => write!(f, "`@`"),
+            Token::Hash       => write!(f, "`#`"),
+            Token::Module     => write!(f, "`module`"),
+            Token::Endmodule  => write!(f, "`endmodule`"),
+            Token::Input      => write!(f, "`input`"),
+            Token::Output     => write!(f, "`output`"),
+            Token::Reg        => write!(f, "`reg`"),
+            Token::Wire       => write!(f, "`wire`"),
+            Token::Always     => write!(f, "`always`"),
+            Token::Posedge    => write!(f, "`posedge`"),
+            Token::If         => write!(f, "`if`"),
+            Token::Else       => write!(f, "`else`"),
+            Token::Case       => write!(f, "`case`"),
+            Token::Endcase    => write!(f, "`endcase`"),
+            Token::Default    => write!(f, "`default`"),
+            Token::Assign     => write!(f, "`assign`"),
+            Token::Begin      => write!(f, "`begin`"),
+            Token::End        => write!(f, "`end`"),
+            Token::Or         => write!(f, "`or`"),
+            Token::Ident(s)   => write!(f, "identifier `{}`", s),
+            Token::Number(v, None)    => write!(f, "number `{}`", v),
+            Token::Number(v, Some(w)) => write!(f, "number `{}'d{}`", w, v),
+            Token::Eof        => write!(f, "end of file"),
+        }
+    }
+}
+
 pub struct Lexer {
     input: Vec<char>,
     pos: usize,
     pub line: usize,
+    /// Line of the most recently produced token (set after whitespace is skipped).
+    pub token_line: usize,
 }
 
 impl Lexer {
@@ -74,6 +136,7 @@ impl Lexer {
             input: input.chars().collect(),
             pos: 0,
             line: 1,
+            token_line: 1,
         }
     }
 
@@ -211,6 +274,8 @@ impl Lexer {
 
     pub fn next_token(&mut self) -> Token {
         self.skip_whitespace_and_comments();
+        // Record the source line of this token after stripping whitespace/comments.
+        self.token_line = self.line;
 
         let ch = match self.advance() {
             Some(c) => c,
@@ -345,19 +410,24 @@ impl Lexer {
                 self.next_token()
             }
 
-            _ => self.next_token(), // skip unknown chars
+            c => {
+                eprintln!("warning: line {}: unexpected character `{}`", self.token_line, c);
+                self.next_token()
+            }
         }
     }
 
-    pub fn tokenize(&mut self) -> Vec<Token> {
+    /// Tokenize the entire input, returning each token paired with its source line number.
+    pub fn tokenize(&mut self) -> Vec<(Token, usize)> {
         let mut tokens = Vec::new();
         loop {
             let tok = self.next_token();
+            let line = self.token_line;
             if tok == Token::Eof {
-                tokens.push(Token::Eof);
+                tokens.push((Token::Eof, line));
                 break;
             }
-            tokens.push(tok);
+            tokens.push((tok, line));
         }
         tokens
     }

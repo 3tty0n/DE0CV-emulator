@@ -3,12 +3,20 @@ use super::lexer::Token;
 
 pub struct Parser {
     tokens: Vec<Token>,
+    /// Source line for each token (parallel to `tokens`).
+    lines: Vec<usize>,
     pos: usize,
 }
 
 impl Parser {
-    pub fn new(tokens: Vec<Token>) -> Self {
-        Self { tokens, pos: 0 }
+    pub fn new(tokens: Vec<(Token, usize)>) -> Self {
+        let mut toks = Vec::with_capacity(tokens.len());
+        let mut lines = Vec::with_capacity(tokens.len());
+        for (tok, line) in tokens {
+            toks.push(tok);
+            lines.push(line);
+        }
+        Self { tokens: toks, lines, pos: 0 }
     }
 
     fn peek(&self) -> &Token {
@@ -21,19 +29,26 @@ impl Parser {
         tok
     }
 
+    /// Line number of the token currently at `pos` (the one `peek()` returns).
+    fn peek_line(&self) -> usize {
+        self.lines.get(self.pos).copied().unwrap_or(0)
+    }
+
     fn expect(&mut self, expected: &Token) -> Result<(), String> {
+        let line = self.peek_line();
         let tok = self.advance();
         if &tok == expected {
             Ok(())
         } else {
-            Err(format!("Expected {:?}, got {:?} at pos {}", expected, tok, self.pos))
+            Err(format!("line {}: expected {}, found {}", line, expected, tok))
         }
     }
 
     fn expect_ident(&mut self) -> Result<String, String> {
+        let line = self.peek_line();
         match self.advance() {
             Token::Ident(s) => Ok(s),
-            tok => Err(format!("Expected identifier, got {:?} at pos {}", tok, self.pos)),
+            tok => Err(format!("line {}: expected identifier, found {}", line, tok)),
         }
     }
 
@@ -95,16 +110,14 @@ impl Parser {
 
         if is_ansi {
             loop {
-                let dir = match self.peek() {
-                    Token::Input => {
-                        self.advance();
-                        PortDir::Input
-                    }
-                    Token::Output => {
-                        self.advance();
-                        PortDir::Output
-                    }
-                    _ => return Err(format!("Expected input/output, got {:?}", self.peek())),
+                let line = self.peek_line();
+                let dir = match self.advance() {
+                    Token::Input  => PortDir::Input,
+                    Token::Output => PortDir::Output,
+                    tok => return Err(format!(
+                        "line {}: expected `input` or `output` in port list, found {}",
+                        line, tok
+                    )),
                 };
 
                 let mut kind = None;
@@ -172,9 +185,10 @@ impl Parser {
     }
 
     fn parse_const_number(&mut self) -> Result<i32, String> {
+        let line = self.peek_line();
         match self.advance() {
             Token::Number(v, _) => Ok(v as i32),
-            tok => Err(format!("Expected number, got {:?}", tok)),
+            tok => Err(format!("line {}: expected integer constant, found {}", line, tok)),
         }
     }
 
@@ -221,10 +235,14 @@ impl Parser {
     }
 
     fn parse_port_decl(&mut self) -> Result<PortDecl, String> {
+        let line = self.peek_line();
         let dir = match self.advance() {
-            Token::Input => PortDir::Input,
+            Token::Input  => PortDir::Input,
             Token::Output => PortDir::Output,
-            tok => return Err(format!("Expected input/output, got {:?}", tok)),
+            tok => return Err(format!(
+                "line {}: expected `input` or `output`, found {}",
+                line, tok
+            )),
         };
 
         let mut kind = None;
@@ -410,7 +428,11 @@ impl Parser {
                 self.expect(&Token::RParen)?;
                 Ok(Sensitivity::Edges(edges))
             }
-            _ => Err(format!("Expected sensitivity list, got {:?}", self.peek())),
+            _ => Err(format!(
+                "line {}: expected sensitivity list (`@*`, `@(*)`, or `@(posedge CLK)`), found {}",
+                self.peek_line(),
+                self.peek()
+            )),
         }
     }
 
@@ -506,9 +528,13 @@ impl Parser {
                 // Range select
                 self.advance();
                 let low = self.parse_const_expr(&idx)?;
+                let line = self.peek_line();
                 let high_val = match self.advance() {
                     Token::Number(v, _) => v as i32,
-                    tok => return Err(format!("Expected number in range, got {:?}", tok)),
+                    tok => return Err(format!(
+                        "line {}: expected upper bound in range select `[{}:N]`, found {}",
+                        line, low, tok
+                    )),
                 };
                 self.expect(&Token::RBrack)?;
                 Ok(LValue::RangeSelect(name, low, high_val))
@@ -524,7 +550,7 @@ impl Parser {
     fn parse_const_expr(&self, expr: &Expr) -> Result<i32, String> {
         match expr {
             Expr::Number(v, _) => Ok(*v as i32),
-            _ => Err("Expected constant expression".to_string()),
+            _ => Err(format!("expected constant expression in range, found `{:?}`", expr)),
         }
     }
 
@@ -741,7 +767,11 @@ impl Parser {
                 self.expect(&Token::RParen)?;
                 Ok(expr)
             }
-            _ => Err(format!("Expected expression, got {:?} at pos {}", self.peek(), self.pos)),
+            _ => Err(format!(
+                "line {}: unexpected token {}, expected an expression",
+                self.peek_line(),
+                self.peek()
+            )),
         }
     }
 }

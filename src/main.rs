@@ -23,7 +23,6 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 
 const TICK_RATE_MS: u64 = 16; // ~60fps
-const DEFAULT_CYCLES_PER_FRAME: u64 = 833_333; // ~50MHz real-time
 
 fn main() -> io::Result<()> {
     let args: Vec<String> = std::env::args().collect();
@@ -41,7 +40,7 @@ fn main() -> io::Result<()> {
     // Parse CLI args
     let mut files = Vec::new();
     let mut top_name: Option<String> = None;
-    let mut cycles_per_frame = DEFAULT_CYCLES_PER_FRAME;
+    let mut speed_override: Option<u64> = None;
     let mut bench = false;
     let mut i = 1;
     while i < args.len() {
@@ -52,7 +51,7 @@ fn main() -> io::Result<()> {
             }
             "--speed" => {
                 i += 1;
-                cycles_per_frame = args[i].parse().unwrap_or(DEFAULT_CYCLES_PER_FRAME);
+                speed_override = args[i].parse().ok();
             }
             "--bench" => bench = true,
             _ => files.push(args[i].clone()),
@@ -87,6 +86,7 @@ fn main() -> io::Result<()> {
         }
     };
 
+    let cycles_per_frame = speed_override.unwrap_or_else(|| sim.suggest_cycles_per_frame());
     eprintln!("Loaded module: {} ({} cycles/frame)", sim.top_name, cycles_per_frame);
 
     if bench {

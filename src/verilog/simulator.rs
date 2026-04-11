@@ -292,6 +292,26 @@ impl Simulator {
         }
     }
 
+    /// Scan all continuous assigns for the largest `sig == N` constant and
+    /// derive a cycles-per-frame value so the simulation runs in real time.
+    /// Returns a fallback of 1_000 if no suitable constant is found.
+    pub fn suggest_cycles_per_frame(&self) -> u64 {
+        let mut max_n: u64 = 0;
+        for (_, expr) in &self.assigns {
+            let n = find_max_eq_const(expr);
+            if n > max_n {
+                max_n = n;
+            }
+        }
+        if max_n > 0 {
+            // max_n is the counter period - 1 (e.g. 49_999 for 50 kHz).
+            // cycles_per_frame = (max_n + 1) / 60  so that 60 frames ≈ 1 second of simulated time.
+            ((max_n + 1) / 60).max(1)
+        } else {
+            1_000
+        }
+    }
+
     /// Sync simulator signals → board outputs
     pub fn write_outputs(&self, board: &mut Board) {
         if let Some(id) = self.ports.ledr {
@@ -305,17 +325,6 @@ impl Simulator {
                 let val = self.values[id] as u8;
                 board.set_hex(i, val);
             }
-        }
-        // Map non-standard output ports to LEDs
-        let mut led_bit = 0usize;
-        for (_, id, width) in &self.ports.output_leds {
-            let val = self.values[*id];
-            for b in 0..(*width as usize) {
-                if led_bit + b < 10 {
-                    board.ledr[led_bit + b] = (val >> b) & 1 != 0;
-                }
-            }
-            led_bit += *width as usize;
         }
         // Auto-display output_leds on 7-seg when no standard HEX ports are mapped
         // (e.g. DiceCounter outputs dice[2:0] with no HEX port)
@@ -336,6 +345,33 @@ impl Simulator {
 }
 
 // Free functions for evaluation — avoids borrow conflicts with Simulator fields
+
+/// Recursively scan a CExpr tree for the largest constant N that appears in
+/// a `Sig == Const(N)` equality check.  These constants are the counter
+/// moduli used to generate enable strobes (e.g. `cnt == 26'd49_999`).
+fn find_max_eq_const(expr: &CExpr) -> u64 {
+    match expr {
+        CExpr::Ternary(cond, t, f) => find_max_eq_const(cond)
+            .max(find_max_eq_const(t))
+            .max(find_max_eq_const(f)),
+        CExpr::BinOp(l, op, r) => {
+            let inner = find_max_eq_const(l).max(find_max_eq_const(r));
+            if matches!(op, BinOp::Eq) {
+                match (l.as_ref(), r.as_ref()) {
+                    (CExpr::Sig(_), CExpr::Const(n)) | (CExpr::Const(n), CExpr::Sig(_)) => {
+                        inner.max(*n)
+                    }
+                    _ => inner,
+                }
+            } else {
+                inner
+            }
+        }
+        CExpr::UnaryOp(_, e) => find_max_eq_const(e),
+        CExpr::BitSel(_, idx) => find_max_eq_const(idx),
+        _ => 0,
+    }
+}
 
 fn eval_expr_fn(expr: &CExpr, values: &[u64]) -> u64 {
     match expr {
@@ -552,18 +588,25 @@ impl<'a> SimBuilder<'a> {
                         if let Some(init_expr) = init {
                             let full_name = self.prefixed(prefix, name);
                             let id = self.sig_map[&full_name];
-                            let expr = self.compile_expr(init_expr, prefix, &sig_widths)?;
+                            let expr = self.compile_expr(init_expr, prefix, &sig_widths)
+                                .map_err(|e| format!(
+                                    "in module '{}', wire '{}': {}",
+                                    module.name, name, e
+                                ))?;
                             self.assigns.push((CLValue::Sig(id), expr));
                         }
                     }
                 }
                 ModuleItem::Assign(assign) => {
-                    let lval = self.compile_lvalue(&assign.target, prefix, &sig_widths)?;
-                    let expr = self.compile_expr(&assign.expr, prefix, &sig_widths)?;
+                    let lval = self.compile_lvalue(&assign.target, prefix, &sig_widths)
+                        .map_err(|e| format!("in module '{}', assign statement: {}", module.name, e))?;
+                    let expr = self.compile_expr(&assign.expr, prefix, &sig_widths)
+                        .map_err(|e| format!("in module '{}', assign statement: {}", module.name, e))?;
                     self.assigns.push((lval, expr));
                 }
                 ModuleItem::Always(always) => {
-                    let stmt = self.compile_stmt(&always.body, prefix, &sig_widths)?;
+                    let stmt = self.compile_stmt(&always.body, prefix, &sig_widths)
+                        .map_err(|e| format!("in module '{}', always block: {}", module.name, e))?;
                     match &always.sensitivity {
                         Sensitivity::Star => {
                             self.combinational.push(stmt);
@@ -593,7 +636,14 @@ impl<'a> SimBuilder<'a> {
         let sub_module = self
             .mod_map
             .get(&inst.module_name)
-            .ok_or_else(|| format!("Module '{}' not found for instantiation", inst.module_name))?
+            .ok_or_else(|| {
+                let scope = if parent_prefix.is_empty() { "top level".to_string() }
+                            else { format!("module '{}'", parent_prefix) };
+                format!(
+                    "module '{}' not found (referenced by instance '{}' in {})",
+                    inst.module_name, inst.inst_name, scope
+                )
+            })?
             .clone();
 
         let inst_prefix = if parent_prefix.is_empty() {
@@ -659,7 +709,7 @@ impl<'a> SimBuilder<'a> {
                     if let Some(&id) = self.sig_map.get(name) {
                         Ok(CExpr::Sig(id))
                     } else {
-                        Err(format!("Signal '{}' not found (prefix='{}')", name, prefix))
+                        Err(format!("undefined signal '{}'", name))
                     }
                 }
             }
@@ -670,7 +720,7 @@ impl<'a> SimBuilder<'a> {
                         .sig_map
                         .get(&full)
                         .or_else(|| self.sig_map.get(name))
-                        .ok_or_else(|| format!("Signal '{}' not found", name))?;
+                        .ok_or_else(|| format!("undefined signal '{}'", name))?;
                     let cidx = self.compile_expr(idx, prefix, sigs)?;
                     Ok(CExpr::BitSel(*id, Box::new(cidx)))
                 } else {
@@ -708,7 +758,7 @@ impl<'a> SimBuilder<'a> {
                     .sig_map
                     .get(&full)
                     .or_else(|| self.sig_map.get(name))
-                    .ok_or_else(|| format!("Signal '{}' not found for lvalue", name))?;
+                    .ok_or_else(|| format!("undefined signal '{}' in lvalue", name))?;
                 Ok(CLValue::Sig(*id))
             }
             LValue::BitSelect(name, idx) => {
@@ -717,7 +767,7 @@ impl<'a> SimBuilder<'a> {
                     .sig_map
                     .get(&full)
                     .or_else(|| self.sig_map.get(name))
-                    .ok_or_else(|| format!("Signal '{}' not found for lvalue", name))?;
+                    .ok_or_else(|| format!("undefined signal '{}' in lvalue", name))?;
                 let cidx = self.compile_expr(idx, prefix, sigs)?;
                 Ok(CLValue::BitSel(*id, Box::new(cidx)))
             }
@@ -728,7 +778,7 @@ impl<'a> SimBuilder<'a> {
                     .sig_map
                     .get(&full)
                     .or_else(|| self.sig_map.get(name))
-                    .ok_or_else(|| format!("Signal '{}' not found for lvalue", name))?;
+                    .ok_or_else(|| format!("undefined signal '{}' in lvalue", name))?;
                 Ok(CLValue::Sig(*id))
             }
         }
